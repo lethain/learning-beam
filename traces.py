@@ -7,13 +7,8 @@ from apache_beam.io import ReadFromText
 from apache_beam.io import WriteToText
 from apache_beam.options.pipeline_options import PipelineOptions
 from apache_beam.options.pipeline_options import SetupOptions
-
-"""
 from apache_beam import window
-session_windowed_items = (
-        items | 'window' >> beam.WindowInto(window.Sessions(10))
-)
-"""
+
 
 class JsonCoder(object):
     def encode(self, x):
@@ -31,22 +26,25 @@ class AssembleTrace(beam.DoFn):
         return ["[%s] %s spans: %s" % (trace, len(spans), services)]
 
 
+def analyze(args, opts):
+    with beam.Pipeline(options=opts) as p:
+        lines = p | ReadFromText(args.input, coder=JsonCoder())
+        output = (lines
+                  | beam.Map(lambda x: (x['trace'], x))
+                  | beam.WindowInto(window.Sessions(10))
+                  | beam.GroupByKey()
+                  | beam.ParDo(AssembleTrace())
+        )
+        output | WriteToText(args.output)    
+    
+
 def run(argv=None):
     parser = argparse.ArgumentParser()
     parser.add_argument('--input', dest='input')
     parser.add_argument('--output', dest='output')
-    known_args, pipeline_args = parser.parse_known_args(argv)
-
-    pipeline_options = PipelineOptions(pipeline_args)
-    with beam.Pipeline(options=pipeline_options) as p:
-        lines = p | ReadFromText(known_args.input, coder=JsonCoder())
-        output = (lines
-                  | beam.Map(lambda x: (x['trace'], x))
-                  | beam.GroupByKey()
-                  | beam.ParDo(AssembleTrace())
-        )
-
-        output | WriteToText(known_args.output)
+    args, pipeline_args = parser.parse_known_args(argv)
+    opts = PipelineOptions(pipeline_args)
+    analyze(args, opts)
 
 
 if __name__ == "__main__":
