@@ -1,5 +1,6 @@
 import argparse
 import logging
+import json
 
 import apache_beam as beam
 from apache_beam.io import ReadFromText
@@ -14,8 +15,20 @@ session_windowed_items = (
 )
 """
 
-def format_results(result):
-    return str(result)
+class JsonCoder(object):
+    def encode(self, x):
+        return json.dumps(x)
+
+    def decode(self, x):
+        return json.loads(x)
+
+
+class AssembleTrace(beam.DoFn):
+    def process(self, element, window=beam.DoFn.WindowParam):
+        trace = element[0]
+        spans = list(element[1])
+        services = " -> ".join([span['destination']['service'] for span in spans])
+        return ["[%s] %s spans: %s" % (trace, len(spans), services)]
 
 
 def run(argv=None):
@@ -26,12 +39,13 @@ def run(argv=None):
 
     pipeline_options = PipelineOptions(pipeline_args)
     with beam.Pipeline(options=pipeline_options) as p:
-        lines = p | ReadFromText(known_args.input)
-        counts = (
-            lines | beam.FlatMap(lambda x: x.split(' ')).with_output_types(unicode)
+        lines = p | ReadFromText(known_args.input, coder=JsonCoder())
+        output = (lines
+                  | beam.Map(lambda x: (x['trace'], x))
+                  | beam.GroupByKey()
+                  | beam.ParDo(AssembleTrace())
         )
-        
-        output = counts | beam.Map(format_results)
+
         output | WriteToText(known_args.output)
 
 
