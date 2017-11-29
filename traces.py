@@ -23,9 +23,8 @@ class AssembleTrace(beam.DoFn):
     "DoFn for processing assembled traces."
     def fmt_span(self, span):
         "Format a span for joining."
-        # ".join([span['destination']['service'] for span in spans])
-        return "%s (t: %s)" % (span['destination']['service'], span['time'])
-
+        vals = (span['destination']['service'], span['time'])
+        return "%s (t: %s)" % vals
 
     def process(self, element, window=beam.DoFn.WindowParam):
         "Take traces grouped by trace id and analyze the trace."
