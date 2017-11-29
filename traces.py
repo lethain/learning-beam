@@ -11,6 +11,7 @@ from apache_beam import window
 
 
 class JsonCoder(object):
+    "Parsing JSON objects."
     def encode(self, x):
         return json.dumps(x)
 
@@ -19,7 +20,9 @@ class JsonCoder(object):
 
 
 class AssembleTrace(beam.DoFn):
+    "DoFn for processing assembled traces."
     def process(self, element, window=beam.DoFn.WindowParam):
+        "Take traces grouped by trace id and analyze the trace."
         trace = element[0]
         spans = list(element[1])
         services = " -> ".join([span['destination']['service'] for span in spans])
@@ -27,6 +30,7 @@ class AssembleTrace(beam.DoFn):
 
 
 def analyze(args, opts):
+    "Core of the pipeline here."
     with beam.Pipeline(options=opts) as p:
         lines = p | ReadFromText(args.input, coder=JsonCoder())
         output = (lines
@@ -35,10 +39,11 @@ def analyze(args, opts):
                   | beam.GroupByKey()
                   | beam.ParDo(AssembleTrace())
         )
-        output | WriteToText(args.output)    
-    
+        output | WriteToText(args.output)
+
 
 def run(argv=None):
+    "Setup pipeline and get CLI args."
     parser = argparse.ArgumentParser()
     parser.add_argument('--input', dest='input')
     parser.add_argument('--output', dest='output')
